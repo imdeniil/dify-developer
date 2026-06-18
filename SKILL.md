@@ -19,6 +19,7 @@ python3 scripts/dify_dev_cli.py setup
 
 **Что делает эта команда:**
 1. Проверяет наличие папки `~/dify-docs/` и, если её нет, автоматически клонирует официальные доки Dify (`git clone --depth 1 https://github.com/langgenius/dify-docs.git ~/dify-docs`).
+2. Автоматически создает конфигурацию субагента для Claude Code (`~/.claude/agents/dify-docs.md`).
 
 После завершения выполнения этой команды все ресурсы станут доступны.
 
@@ -67,7 +68,7 @@ python3 scripts/dify_dev_cli.py setup
 *   **Console API Endpoints**: `references/01-console-api-endpoints.md` — полный справочник по управлению Dify.
 *   **Спецификации нод**: `references/nodes/<node_type>.md` — схемы данных и примеры DSL для каждого типа нод.
 *   **Связи и переходы**: `references/15-transitions-and-edges.md` — правила ветвления и области видимости переменных.
-*   **Официальная документация Dify**: Если нужная деталь отсутствует в базе знаний, проведите поиск в репозитории `~/dify-docs/en/` с помощью Grep.
+*   **Официальная документация Dify**: Если нужная деталь отсутствует в базе знаний, используйте субагент `dify-docs` или проведите поиск в репозитории `~/dify-docs/en/` с помощью Grep.
 
 ---
 
@@ -76,7 +77,7 @@ python3 scripts/dify_dev_cli.py setup
 Для взаимодействия с API используйте скрипт `/home/keemor/defyproj/dify-workflow-dev-src/scripts/dify_dev_cli.py` (или символическую ссылку на него в проекте). Он автоматически подтягивает `DIFY_CONSOLE_TOKEN`, `DIFY_WORKSPACE_ID` и `DIFY_BASE_URL` из файла `/home/keemor/defyproj/.env`.
 
 Основные команды:
-*   `python3 scripts/dify_dev_cli.py setup` — инициализация доков Dify на машине.
+*   `python3 scripts/dify_dev_cli.py setup` — инициализация доков и субагентов на машине.
 *   `python3 scripts/dify_dev_cli.py import --file <path_to_yaml>` — импорт приложения из DSL.
 *   `python3 scripts/dify_dev_cli.py test --app-id <app_id> [--inputs '<json_string>']` — интерактивный запуск draft-версии с чтением SSE.
 *   `python3 scripts/dify_dev_cli.py submit-form --token <form_token> --action <action_id> [--inputs '<json_string>']` — отправка ответа для Human-in-the-Loop формы.
