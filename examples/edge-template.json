@@ -1,0 +1,28 @@
+{
+  "_comment": "Edge template — связь между двумя nodes",
+  "_format": {
+    "data": {
+      "isInIteration": false,
+      "isInLoop": false,
+      "sourceType": "custom",
+      "targetType": "custom"
+    },
+    "id": "<source_id>-source-<target_id>-target",
+    "source": "<source_node_id>",
+    "sourceHandle": "source",
+    "target": "<target_node_id>",
+    "targetHandle": "target",
+    "type": "custom",
+    "zIndex": 0
+  },
+  "_example": {
+    "data": { "isInIteration": false, "isInLoop": false, "sourceType": "custom", "targetType": "custom" },
+    "id": "1749000000010-source-1749000000020-target",
+    "source": "1749000000010",
+    "sourceHandle": "source",
+    "target": "1749000000020",
+    "targetHandle": "target",
+    "type": "custom",
+    "zIndex": 0
+  }
+}

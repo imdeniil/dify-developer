@@ -1,0 +1,47 @@
+{
+  "_comment": "MCP tool node template — для подключения MCP сервера как tool",
+  "_important": [
+    "provider_id = server_identifier (slug), НЕ UUID",
+    "Для array параметров используй type: variable через Code node (type: constant ломается)",
+    "type в tool_parameters может быть только: variable | constant | mixed"
+  ],
+  "data": {
+    "selected": false,
+    "title": "MCP: <tool_name>",
+    "type": "tool",
+    "provider_id": "<server_identifier>",
+    "provider_type": "mcp",
+    "provider_name": "<Human-readable provider name>",
+    "tool_name": "<exact_tool_name_from_mcp>",
+    "tool_label": "<exact_tool_name_from_mcp>",
+    "tool_parameters": {
+      "string_param": {
+        "type": "constant",
+        "value": "fixed-string-value"
+      },
+      "number_param": {
+        "type": "constant",
+        "value": 42
+      },
+      "variable_param": {
+        "type": "variable",
+        "value": ["<source_node_id>", "<output_var>"]
+      },
+      "array_param": {
+        "_warning": "⚠️ constant + array value ломается. Используй variable через Code node",
+        "type": "variable",
+        "value": ["<code_node_id>", "array_output_name"]
+      }
+    },
+    "tool_configurations": {},
+    "plugin_id": ""
+  },
+  "height": 89,
+  "id": "<unique_node_id>",
+  "position": { "x": 680, "y": 282 },
+  "positionAbsolute": { "x": 680, "y": 282 },
+  "sourcePosition": "right",
+  "targetPosition": "left",
+  "type": "custom",
+  "width": 242
+}

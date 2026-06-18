@@ -1,0 +1,44 @@
+{
+  "_comment": "HTTP Request node template — для вызовов внешних API",
+  "_important": [
+    "Variable templating в URL/headers/body: {{#<node_id>.<var>#}} или {{#env.VAR_NAME#}}",
+    "НЕ используй array indexing типа {{#node.arr[0]#}} — не работает. Извлекай через Code node.",
+    "Body type: 'none' | 'form-data' | 'x-www-form-urlencoded' | 'json' | 'raw'",
+    "Headers — строка с разделителем \\n (не array!)"
+  ],
+  "data": {
+    "selected": false,
+    "title": "HTTP: <service>",
+    "type": "http-request",
+    "method": "post",
+    "url": "https://api.example.com/endpoint?key={{#env.API_KEY#}}",
+    "authorization": {
+      "type": "no-auth",
+      "config": null
+    },
+    "headers": "Content-Type:application/json\nX-Custom-Header:value",
+    "params": "query_param=value&other=thing",
+    "body": {
+      "type": "json",
+      "data": "{\"field1\": \"{{#<source_node_id>.<var>#}}\", \"user_id\": \"{{#env.USER_ID#}}\"}"
+    },
+    "variables": [],
+    "timeout": {
+      "connect": 10,
+      "read": 60,
+      "write": 60,
+      "max_connect_timeout": 10,
+      "max_read_timeout": 60,
+      "max_write_timeout": 60
+    },
+    "ssl_verify": true
+  },
+  "height": 89,
+  "id": "<unique_node_id>",
+  "position": { "x": 1280, "y": 282 },
+  "positionAbsolute": { "x": 1280, "y": 282 },
+  "sourcePosition": "right",
+  "targetPosition": "left",
+  "type": "custom",
+  "width": 242
+}

@@ -1,0 +1,52 @@
+{
+  "_comment": "LLM node template — для генерации/классификации/extraction",
+  "_important": [
+    "completion_params.response_format НЕ работает для Anthropic-совместимых моделей",
+    "structured_output_enabled + parameter_rule response_format = конфликт",
+    "Для JSON: structured_output_enabled=false + инструкция в system prompt + Code parse"
+  ],
+  "data": {
+    "selected": false,
+    "title": "LLM: <role>",
+    "type": "llm",
+    "model": {
+      "provider": "imdeniil/zai-coding-plan/zai_coding_plan",
+      "name": "glm-4.7-flash",
+      "mode": "chat",
+      "completion_params": {
+        "temperature": 0.5,
+        "max_tokens": 4096
+      }
+    },
+    "prompt_template": [
+      {
+        "role": "system",
+        "text": "You are a helpful assistant.\n\nЕсли нужно вернуть JSON:\nВерни ответ в формате JSON (без markdown, без ```json```):\n{\"field1\": \"value\", \"field2\": 123}",
+        "edition_type": "basic"
+      },
+      {
+        "role": "user",
+        "text": "Process: {{#<source_node_id>.<output_var>#}}",
+        "edition_type": "basic"
+      }
+    ],
+    "vision": { "enabled": false, "configs": { "variable_selector": [] } },
+    "memory": { "enabled": false, "window": { "enabled": false, "size": 50 } },
+    "context": { "enabled": false, "variable_selector": [] },
+    "structured_output_enabled": false,
+    "retry_config": {
+      "enabled": false,
+      "max_retries": 1,
+      "retry_interval": 1000,
+      "exponential_backoff": { "enabled": false, "multiplier": 2, "max_interval": 10000 }
+    }
+  },
+  "height": 89,
+  "id": "<unique_node_id>",
+  "position": { "x": 980, "y": 282 },
+  "positionAbsolute": { "x": 980, "y": 282 },
+  "sourcePosition": "right",
+  "targetPosition": "left",
+  "type": "custom",
+  "width": 242
+}

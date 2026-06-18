@@ -1,0 +1,29 @@
+{
+  "_comment": "Code node template — добавить в graph.nodes при sync draft",
+  "data": {
+    "selected": false,
+    "title": "Code: <purpose>",
+    "type": "code",
+    "variables": [
+      {
+        "variable": "input1",
+        "value_selector": ["<source_node_id>", "<output_var>"]
+      }
+    ],
+    "code_language": "python3",
+    "code": "import json\nfrom datetime import datetime, timezone\n\ndef main(input1: str) -> dict:\n    \"\"\"Документация функции.\"\"\"\n    return {\n        \"result\": input1.upper(),\n        \"count\": len(input1),\n        \"items\": [\"a\", \"b\", \"c\"],\n    }\n",
+    "outputs": {
+      "result": { "type": "string", "children": null },
+      "count": { "type": "number", "children": null },
+      "items": { "type": "array[string]", "children": null }
+    }
+  },
+  "height": 89,
+  "id": "<unique_node_id>",
+  "position": { "x": 380, "y": 282 },
+  "positionAbsolute": { "x": 380, "y": 282 },
+  "sourcePosition": "right",
+  "targetPosition": "left",
+  "type": "custom",
+  "width": 242
+}
