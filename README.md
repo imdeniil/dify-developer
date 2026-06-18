@@ -1,74 +1,133 @@
-# Dify Workflow Dev — Reference для будущих skills
+# Dify Developer
 
-База знаний для разработки Dify workflows через Console API. Собрана из реальной практики (создание `jobs-digest` проекта, 2026-06-17, Dify 1.14.2).
+**Dify Developer** — это готовый набор инструментов (CLI-утилита, шаблоны и база знаний) для автоматизации разработки, тестирования, отладки и деплоя Dify-приложений (workflows/chatflows) v1.14.2 через Dify Console API.
 
-## Цель
+Проект создан для того, чтобы избавить разработчиков от рутинного ручного кликания в UI Dify и позволить управлять жизненным циклом сценариев прямо из терминала или через ИИ-ассистентов.
 
-Когда нужно создать/изменить/отладить Dify workflow — использовать этот reference вместо ресёрча каждый раз. Особенно полезно для построения **skills** в Claude Code и Gemini Kit, которые автоматизируют рутину workflow разработки.
+---
 
-## Структура
+## Основные возможности
 
-| Файл | Что внутри |
-|---|---|
-| [01-console-api-endpoints.md](references/01-console-api-endpoints.md) | Все endpoints для работы с workflow через API |
-| [02-dsl-format.md](references/02-dsl-format.md) | YAML DSL формат для импорта apps |
-| [03-node-types.md](references/03-node-types.md) | Справочник всех node types + их data schemas |
-| [04-variable-templating.md](references/04-variable-templating.md) | Variables: variable/constant/mixed, environment vars, templating |
-| [05-mcp-tool-node.md](references/05-mcp-tool-node.md) | Специфика MCP tool node (частые грабли) |
-| [06-llm-node-gotchas.md](references/06-llm-node-gotchas.md) | LLM node: Anthropic/GLM нюансы, structured output |
-| [07-run-and-debug.md](references/07-run-and-debug.md) | Как запускать, парсить SSE, дебажить |
-| [08-gotchas-and-lessons.md](references/08-gotchas-and-lessons.md) | Баги, обходы, lessons learned (12 пунктов) |
-| [09-auth-and-access.md](references/09-auth-and-access.md) | ADMIN_API_KEY, X-WORKSPACE-ID заголовок |
-| [10-llm-output-pitfalls.md](references/10-llm-output-pitfalls.md) | LLM output pitfalls — галлюцинации, обрезы, parsing (12 пунктов + patterns) |
-| [examples/](examples/) | Готовые шаблоны: minimal, MCP tool, LLM, HTTP, **jobs-digest case study**, **healthcheck pattern** |
-| [nodes/](references/nodes/) | Верифицированные спецификации нод: [code](references/nodes/code.md), [http-request](references/nodes/http-request.md), [if-else](references/nodes/if-else.md), [iteration](references/nodes/iteration.md), [llm](references/nodes/llm.md), [template-transform](references/nodes/template-transform.md), [variable-aggregator](references/nodes/variable-aggregator.md), [question-classifier](references/nodes/question-classifier.md), [parameter-extractor](references/nodes/parameter-extractor.md), [list-operator](references/nodes/list-operator.md), [document-extractor](references/nodes/document-extractor.md), [loop](references/nodes/loop.md), [human-input](references/nodes/human-input.md), [start](references/nodes/start.md), [end](references/nodes/end.md), [answer](references/nodes/answer.md), [variable-assigner](references/nodes/variable-assigner.md), [knowledge-retrieval](references/nodes/knowledge-retrieval.md), [tool](references/nodes/tool.md), [agent](references/nodes/agent.md), [trigger](references/nodes/trigger.md) |
-| [11-annotations.md](references/11-annotations.md) | Annotations (Annotation Reply): CRUD Q&A пар, async enable job, batch import, embedding constraints |
-| [12-monitoring-runs.md](references/12-monitoring-runs.md) | Мониторинг: workflow-runs, node-executions, counts, tracing (Langfuse), conversation variables |
-| [13-app-management.md](references/13-app-management.md) | App lifecycle: создание/копирование/экспорт/публикация, API keys, site/API enable |
-| [14-platform-coverage.md](references/14-platform-coverage.md) | **Сводная таблица** покрытия: все 21 нод + platform entities, статус верификации, constraints |
-| [15-transitions-and-edges.md](references/15-transitions-and-edges.md) | **Связи и переходы** (Edges & Routing): типы, структура в DSL, область видимости переменных |
-| [16-unverified-features.md](references/16-unverified-features.md) | **Неверифицированные возможности**: список настроек и комбинаций, не проходивших живые тесты |
+1. **Dify Workflow CLI (`dify_dev_cli.py`)**:
+   - Автоматический импорт сценариев из YAML DSL.
+   - Запуск и интерактивное тестирование draft-версий сценариев с чтением логов (SSE-потока) в реальном времени.
+   - Прохождение шагов с подтверждением человеком (**Human-in-the-Loop**) прямо из CLI.
+   - Управление жизненным циклом (публикация, удаление приложений).
+2. **База знаний и спецификации (Reference)**:
+   - Подробные спецификации схем данных для всех типов нод Dify (в каталоге `references/nodes/`).
+   - Руководства по сложным темам: обработка выводов LLM, интеграция MCP-серверов, отслеживание состояний между запусками и организация связей/переходов между узлами графа.
+3. **Готовые шаблоны сценариев (Examples)**:
+   - Практические кейсы (например, периодический сборщик дайджеста вакансий с дедупликацией).
+   - Шаблоны конфигураций для разных типов нод.
 
+---
 
-## Использование в качестве Skill
+## Быстрый старт
 
-Этот каталог зарегистрирован как Skill `dify-developer` в системе Gemini Kit и Claude Code. 
+### 1. Установка и настройка
+Склонируйте репозиторий в удобное место:
+```bash
+git clone https://github.com/imdeniil/dify-developer.git
+cd dify-developer
+```
 
-При активации скилл выполняет автоматический разбор бизнес-требований, генерацию YAML DSL, импорт через Console API, интерактивный тест-ран с обработкой пауз Human-in-the-Loop и публикацию.
+Создайте файл `.env` в корневом каталоге вашего основного проекта (или скопируйте значения) со следующими переменными:
+```ini
+DIFY_BASE_URL=http://localhost:3006
+DIFY_CONSOLE_TOKEN=dify-admin-ваш-токен
+DIFY_WORKSPACE_ID=ваш-workspace-id
+```
+*Подробнее про авторизацию см. в [references/09-auth-and-access.md](references/09-auth-and-access.md).*
 
-### Автоматическая инициализация (Bootstrap) и CLI
-
-Скилл полностью автономен. При первом запуске он автоматически инициализирует окружение с помощью скрипта:
+### 2. Автоматическая инициализация (Bootstrap)
+Запустите команду начальной настройки:
 ```bash
 python3 scripts/dify_dev_cli.py setup
 ```
-Эта команда сама склонирует репозиторий официальной документации Dify в `~/dify-docs/` (через depth=1 для скорости) и создаст конфигурацию субагента для Claude Code.
+**Что сделает эта команда:**
+1. Склонирует официальную документацию Dify в `~/dify-docs/` (с `depth=1` для экономии места).
+2. Настроит субагент для Claude Code в `~/.claude/agents/dify-docs.md`, чтобы ИИ мог быстро искать информацию по докам.
 
-Также CLI-скрипт используется ИИ-ассистентом для выполнения API-вызовов в Dify (импорт, запуск, прохождение HITL-форм, публикация). Подробнее см. в [SKILL.md](SKILL.md).
+---
 
-### Приоритет чтения для ИИ при разработке:
+## Использование CLI
 
-1. **references/08-gotchas-and-lessons.md** — известные баги (избежать повторения)
-2. **references/10-llm-output-pitfalls.md** — паттерны парсинга ответов LLM
-3. **references/05-mcp-tool-node.md** — если workflow использует MCP
-4. **references/06-llm-node-gotchas.md** — если есть LLM nodes
-5. **examples/jobs-digest-case-study.md** — подробный пример разработки
-6. **references/01-console-api-endpoints.md** — API reference
-7. **references/03-node-types.md** — схемы для конкретного типа нод
-8. **examples/** — шаблоны для копирования
+Все команды запускаются с помощью скрипта `scripts/dify_dev_cli.py`:
 
-## Версии
+### Импорт сценария из YAML DSL
+```bash
+python3 scripts/dify_dev_cli.py import --file path/to/app.yml [--name "Имя приложения"]
+```
+Команда импортирует сценарий в Dify и возвращает его `app_id`.
 
-- Dify: 1.14.2 (self-hosted)
-- Plugin daemon: 0.6.1
-- Python: 3.12.3 (в plugin_daemon контейнере)
-- Источник: реальная практика + `~/dify/api/` source code
+### Тестирование (Draft Run)
+Вы можете запустить сценарий в режиме интерактивного тестирования:
+```bash
+python3 scripts/dify_dev_cli.py test --app-id <app_id> --inputs '{"query": "Привет"}'
+```
+CLI подключится к SSE-потоку Dify и будет выводить шаги выполнения в реальном времени.
 
-## Связанные ресурсы
+### Прохождение Human-in-the-Loop (HITL)
+Если выполнение сценария приостановится на ноде **Human Input**, CLI выведет токен формы:
+```
+⚠️ HUMAN INPUT REQUIRED!
+  Node: Review (ID: node_123)
+  Token: form-abc123xyz
+```
+Вы можете подтвердить или отклонить шаг прямо из консоли:
+```bash
+python3 scripts/dify_dev_cli.py submit-form --token form-abc123xyz --action approve --inputs '{"comment": "Все хорошо"}'
+```
+После этого вы можете получить оставшиеся события выполнения:
+```bash
+python3 scripts/dify_dev_cli.py get-events --run-id <run_id>
+```
 
-- **Running Dify**: http://localhost:3006
-- **Source code**: `~/dify/api/` (backend), `~/dify/web/` (frontend)
-- **Документация**: `~/dify-docs/en/`
-- **Workspace**: `~/defyproj/`
-- **CLAUDE.md**: `~/defyproj/CLAUDE.md` — общий контекст
-- **GEMINI.md**: `~/defyproj/GEMINI.md` — специфика Dify-сервисов
+### Публикация и деплой
+Опубликуйте протестированную версию сценария:
+```bash
+python3 scripts/dify_dev_cli.py publish --app-id <app_id>
+```
+
+---
+
+## Структура репозитория
+
+```
+dify-developer/
+├── README.md                 # Описание проекта
+├── SKILL.md                  # Системные инструкции для подключения как ИИ-скилла
+├── scripts/
+│   └── dify_dev_cli.py       # CLI-утилита для работы с API Dify
+├── examples/                 # Практические примеры и шаблоны
+│   ├── jobs-digest-case-...  # Разбор сложного кейса (дайджест вакансий)
+│   ├── external-state-pat... # Шаблон организации state между запусками
+│   ├── healthcheck-pattern.md# Шаблон проверки работоспособности
+│   └── *.json, *.yml         # Минимальные DSL-шаблоны нод
+└── references/               # База знаний по разработке
+    ├── nodes/                # Спецификации всех 21 нод (llm, code, loop и т.д.)
+    ├── 01-console-api-e...   # Справочник API Dify
+    ├── 05-mcp-tool-node.md   # Нюансы работы с MCP-серверами
+    ├── 08-gotchas-and-l...   # Важные баги Dify и обходы (12 пунктов)
+    ├── 10-llm-output-pi...   # Решение проблем с парсингом и качеством ответов LLM
+    └── 15-transitions-a...   # Правила связей (Edges) и ветвления в графе
+```
+
+---
+
+## Подключение в качестве ИИ-скилла (Claude Code / Gemini Kit)
+
+Этот репозиторий спроектирован так, чтобы его можно было использовать в качестве **Skill** для агентов ИИ. 
+
+Для интеграции с **Claude Code** скрипт `setup` автоматически создает агента, к которому можно обращаться для быстрого поиска по документации:
+`dify-docs` — осуществляет семантический и текстовый поиск по официальным докам Dify в `~/dify-docs/en/`.
+
+Инструкции для ИИ-разработчика по генерации DSL и работе с этим репозиторием описаны в файле [SKILL.md](SKILL.md).
+
+---
+
+## Системные требования
+
+- Dify v1.14.2 (self-hosted)
+- Python 3.10+
+- Доступ к сети с инстанса Dify до вызываемых API/MCP.
