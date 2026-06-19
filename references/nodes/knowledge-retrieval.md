@@ -1,3 +1,6 @@
+> ⚠️ ИСТОЧНИК ИСТИНЫ: Pydantic-схема в бэкенде Dify (в ~/dify/api/core/workflow/nodes/knowledge_retrieval/entities.py).
+> Если референс расходится с кодом — код прав. Перед генерацией DSL сверяй поля.
+
 # Knowledge Retrieval Node — Верифицированный справочник
 
 > Протестировано на Dify 1.14.2 self-hosted, 2026-06-18.
@@ -22,7 +25,11 @@
       "top_k": 3,
       "score_threshold_enabled": false,
       "score_threshold": 0.5,
-      "reranking_enable": false
+      "reranking_enable": true,
+      "reranking_model": {
+        "provider": "cohere",
+        "model": "rerank-multilingual-v3.0"
+      }
     }
   },
   "position": { "x": 400, "y": 282 },
@@ -46,6 +53,9 @@
   - `score_threshold_enabled` (bool) — включение фильтрации по схожести.
   - `score_threshold` (float) — минимальный порог схожести (Similarity Score) от 0.0 до 1.0.
   - `reranking_enable` (bool) — включение модели Rerank для постобработки и переупорядочивания результатов.
+  - `reranking_model` (object) — конфигурация модели Rerank. **Важно:** на уровне workflow/DSL ключи должны называться именно `provider` и `model` (они мапятся на Pydantic-поля бэкенда `reranking_provider_name` и `reranking_model_name` через validation aliases):
+    - `provider` (string) — идентификатор провайдера (например, `"cohere"`).
+    - `model` (string) — имя модели (например, `"rerank-multilingual-v3.0"`).
 
 ## Outputs
 

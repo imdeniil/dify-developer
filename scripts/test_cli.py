@@ -238,5 +238,73 @@ class TestDifyDevCli(unittest.TestCase):
         self.assertEqual(res.get('name'), 'test.txt')
         mock_urlopen.assert_called_once()
 
+    @patch('dify_dev_cli.api_call')
+    def test_get_app_key_with_app_id(self, mock_api_call):
+        # 1. Existing key found
+        mock_api_call.return_value = {'data': [{'token': 'existing-token-123'}]}
+        key = dify_dev_cli.get_app_key(None, app_id='app-123')
+        self.assertEqual(key, 'existing-token-123')
+        mock_api_call.assert_called_with('/console/api/apps/app-123/api-keys')
+
+        # 2. No existing key, auto-create
+        mock_api_call.side_effect = [
+            {'data': []}, # GET api-keys
+            {'token': 'new-token-456'} # POST create-key
+        ]
+        key = dify_dev_cli.get_app_key(None, app_id='app-123')
+        self.assertEqual(key, 'new-token-456')
+
+    @patch('dify_dev_cli.urllib.request.urlopen')
+    @patch('dify_dev_cli.os.path.exists')
+    @patch('dify_dev_cli.open', create=True)
+    def test_console_upload_file(self, mock_open, mock_exists, mock_urlopen):
+        mock_exists.return_value = True
+        mock_file = MagicMock()
+        mock_file.read.return_value = b'dummy-file-content'
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"id": "file-console-123", "name": "doc.txt"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        res = dify_dev_cli.console_upload_file('dummy_doc.txt')
+        self.assertEqual(res.get('id'), 'file-console-123')
+        self.assertEqual(res.get('name'), 'doc.txt')
+        mock_urlopen.assert_called_once()
+
+    @patch('dify_dev_cli.app_api_call')
+    def test_run_chatflow_blocking(self, mock_app_api_call):
+        mock_app_api_call.return_value = {
+            'id': 'msg-123',
+            'conversation_id': 'conv-456',
+            'answer': 'Hello!'
+        }
+        dify_dev_cli.run_chatflow('app-key-123', 'Hi', {}, [], None, 'blocking', 'test-user')
+        mock_app_api_call.assert_called_once_with(
+            'app-key-123',
+            '/v1/chat-messages',
+            'POST',
+            {
+                'query': 'Hi',
+                'inputs': {},
+                'files': [],
+                'response_mode': 'blocking',
+                'user': 'test-user'
+            }
+        )
+
+    @patch('dify_dev_cli.urllib.request.urlopen')
+    def test_run_chatflow_streaming(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.readline.side_effect = [
+            b'data: {"event": "workflow_started", "id": "run-123", "task_id": "task-456"}\n',
+            b'data: {"event": "message", "answer": "Hello"}\n',
+            b'data: {"event": "message_end", "conversation_id": "conv-456"}\n',
+            b''
+        ]
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        dify_dev_cli.run_chatflow('app-key-123', 'Hi', {}, [], 'conv-456', 'streaming', 'test-user')
+        self.assertEqual(mock_urlopen.call_count, 1)
+
 if __name__ == '__main__':
     unittest.main()

@@ -342,6 +342,108 @@ def app_upload_file(app_key, file_path, user):
         print(f"File upload connection error: {e}", file=sys.stderr)
         sys.exit(1)
 
+def console_upload_file(file_path):
+    url = f"{BASE_URL}/console/api/files/upload"
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+    
+    if not os.path.exists(file_path):
+        print(f"Error: File '{file_path}' not found", file=sys.stderr)
+        sys.exit(1)
+        
+    filename = os.path.basename(file_path)
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+        
+    with open(file_path, 'rb') as f:
+        file_content = f.read()
+        
+    parts = []
+    
+    # source part
+    parts.append(f"--{boundary}".encode('utf-8'))
+    parts.append(f'Content-Disposition: form-data; name="source"'.encode('utf-8'))
+    parts.append(b'')
+    parts.append(b'datasets')
+    
+    # file part
+    parts.append(f"--{boundary}".encode('utf-8'))
+    parts.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode('utf-8'))
+    parts.append(f'Content-Type: {mime_type}'.encode('utf-8'))
+    parts.append(b'')
+    parts.append(file_content)
+    
+    # end
+    parts.append(f"--{boundary}--".encode('utf-8'))
+    parts.append(b'')
+    
+    body = b'\r\n'.join(parts)
+    
+    req_headers = {
+        'Authorization': f'Bearer {TOKEN}',
+        'X-WORKSPACE-ID': WS_ID,
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body))
+    }
+    
+    req = urllib.request.Request(url, data=body, headers=req_headers, method='POST')
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode()
+            return json.loads(content) if content else {}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        print(f"Console file upload failed ({e.code}): {err_body}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Console file upload connection error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def run_chatflow(app_key, query, inputs, files, conversation_id, response_mode, user):
+    url = f"{BASE_URL}/v1/chat-messages"
+    payload = {
+        'query': query,
+        'inputs': inputs,
+        'files': files,
+        'response_mode': response_mode,
+        'user': user
+    }
+    if conversation_id:
+        payload['conversation_id'] = conversation_id
+        
+    data = json.dumps(payload).encode()
+    app_headers = {
+        'Authorization': f'Bearer {app_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    if response_mode == 'streaming':
+        req = urllib.request.Request(url, data=data, headers=app_headers, method='POST')
+        print("Starting chatflow execution stream (Service API)...")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                while True:
+                    line = resp.readline().decode()
+                    if not line:
+                        break
+                    line = line.strip()
+                    event = parse_sse_line(line)
+                    if event:
+                        handle_app_workflow_event(event)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode()
+            print(f"Chatflow stream failed ({e.code}): {err_body}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Chatflow stream connection error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        res = app_api_call(app_key, '/v1/chat-messages', 'POST', payload)
+        print("\n🏁 CHATFLOW MESSAGE COMPLETED (Blocking Mode)")
+        print(f"  Message ID:      {res.get('id')}")
+        print(f"  Conversation ID:  {res.get('conversation_id')}")
+        print(f"  Answer:           {res.get('answer')}")
+
 def handle_app_workflow_event(event):
     ev = event.get('event')
     data = event.get('data') or event
@@ -362,6 +464,10 @@ def handle_app_workflow_event(event):
             print(f"    Error: {data.get('error')}")
     elif ev == 'text_chunk':
         print(data.get('text', ''), end='', flush=True)
+    elif ev in ('message', 'agent_message'):
+        print(data.get('answer', ''), end='', flush=True)
+    elif ev == 'message_end':
+        print(f"\n\n🏁 MESSAGE COMPLETED (Conversation ID: {data.get('conversation_id')})")
     elif ev == 'workflow_finished':
         print(f"\n🏁 WORKFLOW FINISHED: {data.get('status')}")
         if data.get('outputs'):
@@ -415,12 +521,29 @@ def run_published_app(app_key, inputs, files, response_mode, user):
         if data.get('error'):
             print(f"  Error:   {data.get('error')}")
 
-def get_app_key(args_key):
+def get_app_key(args_key, app_id=None):
     key = args_key or env_vars.get('DIFY_APP_KEY')
-    if not key:
-        print("Error: App API key is required. Specify via --app-key or DIFY_APP_KEY in .env", file=sys.stderr)
-        sys.exit(1)
-    return key
+    if key:
+        return key
+    
+    if app_id:
+        print(f"App key not provided. Attempting to fetch keys for App {app_id}...")
+        try:
+            res = api_call(f'/console/api/apps/{app_id}/api-keys')
+            keys = res.get('data', [])
+            if keys:
+                print(f"Using existing API Key token: {keys[0].get('token')}")
+                return keys[0].get('token')
+            else:
+                print("No API keys found. Creating a new API Key...")
+                res = api_call(f'/console/api/apps/{app_id}/api-keys', 'POST', {})
+                print(f"Created new API Key token: {res.get('token')}")
+                return res.get('token')
+        except Exception as e:
+            print(f"Failed to retrieve/create API key automatically: {e}", file=sys.stderr)
+            
+    print("Error: App API key is required. Specify via --app-key, DIFY_APP_KEY in .env, or ensure app-id is provided.", file=sys.stderr)
+    sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Dify Workflow Developer CLI")
@@ -569,6 +692,7 @@ def main():
     # App run
     app_run_parser = subparsers.add_parser("app-run", help="Run the published workflow using Service API")
     app_run_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    app_run_parser.add_argument("--app-id", help="App ID (used to automatically fetch API key if --app-key is omitted)")
     app_run_parser.add_argument("--inputs", default="{}", help="Inputs as JSON string")
     app_run_parser.add_argument("--files", default="[]", help="Input files as JSON string")
     app_run_parser.add_argument("--no-streaming", action="store_true", help="Run in blocking mode instead of streaming")
@@ -594,6 +718,66 @@ def main():
     app_upload_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
     app_upload_parser.add_argument("--file", required=True, help="Path to local file to upload")
     app_upload_parser.add_argument("--user", default="dify-developer-cli-user", help="User identifier")
+
+    # list-datasets
+    list_datasets_parser = subparsers.add_parser("list-datasets", help="List datasets (knowledge bases) in the workspace")
+    list_datasets_parser.add_argument("--page", type=int, default=1, help="Page number")
+    list_datasets_parser.add_argument("--limit", type=int, default=50, help="Items per page")
+
+    # create-dataset
+    create_dataset_parser = subparsers.add_parser("create-dataset", help="Create an empty dataset")
+    create_dataset_parser.add_argument("--name", required=True, help="Dataset name")
+    create_dataset_parser.add_argument("--description", default="", help="Dataset description")
+    create_dataset_parser.add_argument("--indexing-technique", default="high_quality", choices=["high_quality", "economy"], help="Indexing technique")
+    create_dataset_parser.add_argument("--permission", default="only_me", choices=["only_me", "all_team_members", "partial_members"], help="Access permission")
+
+    # patch-dataset
+    patch_dataset_parser = subparsers.add_parser("patch-dataset", help="Patch/update dataset settings")
+    patch_dataset_parser.add_argument("--dataset-id", required=True, help="Dataset ID")
+    patch_dataset_parser.add_argument("--name", help="New dataset name")
+    patch_dataset_parser.add_argument("--description", help="New dataset description")
+    patch_dataset_parser.add_argument("--permission", choices=["only_me", "all_team_members", "partial_members"], help="New access permission")
+    patch_dataset_parser.add_argument("--indexing-technique", choices=["high_quality", "economy"], help="New indexing technique")
+    patch_dataset_parser.add_argument("--embedding", help="New embedding model (e.g. openai/text-embedding-3-small or text-embedding-3-small)")
+    patch_dataset_parser.add_argument("--threshold", type=float, help="New score threshold (float)")
+
+    # list-documents
+    list_documents_parser = subparsers.add_parser("list-documents", help="List documents in a dataset")
+    list_documents_parser.add_argument("--dataset-id", required=True, help="Dataset ID")
+    list_documents_parser.add_argument("--page", type=int, default=1, help="Page number")
+    list_documents_parser.add_argument("--limit", type=int, default=50, help="Items per page")
+
+    # upload-document
+    upload_document_parser = subparsers.add_parser("upload-document", help="Upload a document file to a dataset")
+    upload_document_parser.add_argument("--dataset-id", required=True, help="Dataset ID")
+    upload_document_parser.add_argument("--file", required=True, help="Path to local file to upload")
+    upload_document_parser.add_argument("--doc-form", default="text_model", choices=["text_model", "qa_model"], help="Index document form")
+    upload_document_parser.add_argument("--separator", help="Custom chunk separator")
+    upload_document_parser.add_argument("--max-tokens", type=int, help="Custom chunk max tokens")
+    upload_document_parser.add_argument("--chunk-overlap", type=int, help="Custom chunk overlap size")
+
+    # delete-document
+    delete_document_parser = subparsers.add_parser("delete-document", help="Delete a document from a dataset")
+    delete_document_parser.add_argument("--dataset-id", required=True, help="Dataset ID")
+    delete_document_parser.add_argument("--document-id", required=True, help="Document ID")
+
+    # retrieve (hit testing)
+    retrieve_parser = subparsers.add_parser("retrieve", help="Test retrieve / hit testing against a dataset")
+    retrieve_parser.add_argument("--dataset-id", required=True, help="Dataset ID")
+    retrieve_parser.add_argument("--query", required=True, help="Retrieval query string")
+    retrieve_parser.add_argument("--top-k", type=int, help="Number of retrieved results (top-k)")
+    retrieve_parser.add_argument("--threshold", type=float, help="Score threshold (float)")
+
+    # test-chatflow
+    test_chatflow_parser = subparsers.add_parser("test-chatflow", help="Test a published Chatflow app using Service API")
+    test_chatflow_parser.add_argument("--app-id", help="App ID (used to automatically retrieve/create API key if --app-key is omitted)")
+    test_chatflow_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    test_chatflow_parser.add_argument("--query", required=True, help="Query string")
+    test_chatflow_parser.add_argument("--inputs", default="{}", help="Inputs as JSON string")
+    test_chatflow_parser.add_argument("--files", default="[]", help="Input files as JSON string")
+    test_chatflow_parser.add_argument("--conversation-id", help="Conversation ID to continue a chat")
+    test_chatflow_parser.add_argument("--no-streaming", action="store_true", help="Run in blocking mode instead of streaming")
+    test_chatflow_parser.add_argument("--user", default="dify-developer-cli-user", help="User identifier")
 
     args = parser.parse_args()
 
@@ -1028,7 +1212,7 @@ def main():
         print(f"Draft JSON graph updated successfully. New hash: {res.get('hash')}")
 
     elif args.command == "app-run":
-        app_key = get_app_key(args.app_key)
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
         try:
             inputs_dict = json.loads(args.inputs)
         except json.JSONDecodeError:
@@ -1044,7 +1228,7 @@ def main():
         run_published_app(app_key, inputs_dict, files_list, mode, args.user)
 
     elif args.command == "app-stop":
-        app_key = get_app_key(args.app_key)
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
         payload = {
             'user': args.user
         }
@@ -1053,23 +1237,240 @@ def main():
         print(f"Stop task request sent. Result: {result}")
 
     elif args.command == "app-run-detail":
-        app_key = get_app_key(args.app_key)
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
         res = app_api_call(app_key, f'/v1/workflows/run/{args.run_id}')
         print(json.dumps(res, indent=2, ensure_ascii=False))
 
     elif args.command == "app-parameters":
-        app_key = get_app_key(args.app_key)
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
         res = app_api_call(app_key, '/v1/parameters')
         print(json.dumps(res, indent=2, ensure_ascii=False))
 
     elif args.command == "app-upload":
-        app_key = get_app_key(args.app_key)
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
         res = app_upload_file(app_key, args.file, args.user)
         print("File uploaded successfully:")
         print(f"  ID:        {res.get('id')}")
         print(f"  Name:      {res.get('name')}")
         print(f"  Extension: {res.get('extension')}")
         print(f"  Size:      {res.get('size')} bytes")
+
+    elif args.command == "list-datasets":
+        res = api_call(f'/console/api/datasets?page={args.page}&limit={args.limit}')
+        datasets = res.get('data', [])
+        headers = ['ID', 'Name', 'Indexing Technique', 'Doc Count', 'Word Count', 'Created At']
+        rows = []
+        for d in datasets:
+            rows.append([
+                d.get('id'),
+                d.get('name'),
+                d.get('indexing_technique') or 'N/A',
+                d.get('document_count', 0),
+                d.get('word_count', 0),
+                format_timestamp(d.get('created_at'))
+            ])
+        print_table(headers, rows)
+
+    elif args.command == "create-dataset":
+        payload = {
+            'name': args.name,
+            'description': args.description,
+            'indexing_technique': args.indexing_technique,
+            'permission': args.permission,
+            'provider': 'vendor'
+        }
+        res = api_call('/console/api/datasets', 'POST', payload)
+        print("Dataset created successfully:")
+        print(f"  ID:                 {res.get('id')}")
+        print(f"  Name:               {res.get('name')}")
+        print(f"  Indexing Technique: {res.get('indexing_technique')}")
+        print(f"  Permission:         {res.get('permission')}")
+
+    elif args.command == "patch-dataset":
+        payload = {}
+        if args.name is not None:
+            payload['name'] = args.name
+        if args.description is not None:
+            payload['description'] = args.description
+        if args.permission is not None:
+            payload['permission'] = args.permission
+        if args.indexing_technique is not None:
+            payload['indexing_technique'] = args.indexing_technique
+
+        if args.embedding is not None:
+            if '/' in args.embedding:
+                provider, model = args.embedding.split('/', 1)
+            else:
+                current = api_call(f'/console/api/datasets/{args.dataset_id}')
+                provider = current.get('embedding_model_provider')
+                model = args.embedding
+                if not provider:
+                    print("Error: Could not resolve embedding model provider. Specify in format provider/model.", file=sys.stderr)
+                    sys.exit(1)
+            payload['embedding_model'] = model
+            payload['embedding_model_provider'] = provider
+
+        if args.threshold is not None:
+            current = api_call(f'/console/api/datasets/{args.dataset_id}')
+            retrieval_dict = current.get('retrieval_model_dict') or {}
+            retrieval_payload = {
+                'search_method': retrieval_dict.get('search_method', 'semantic_search'),
+                'reranking_enable': retrieval_dict.get('reranking_enable', False),
+                'reranking_model': retrieval_dict.get('reranking_model', {'reranking_provider_name': '', 'reranking_model_name': ''}),
+                'reranking_mode': retrieval_dict.get('reranking_mode'),
+                'top_k': retrieval_dict.get('top_k', 4),
+                'score_threshold_enabled': True,
+                'score_threshold': float(args.threshold),
+                'weights': retrieval_dict.get('weights')
+            }
+            payload['retrieval_model'] = retrieval_payload
+
+        res = api_call(f'/console/api/datasets/{args.dataset_id}', 'PATCH', payload)
+        print("Dataset updated successfully:")
+        print(f"  ID:          {res.get('id')}")
+        print(f"  Name:        {res.get('name')}")
+        print(f"  Description: {res.get('description')}")
+        print(f"  Embedding:   {res.get('embedding_model_provider')}/{res.get('embedding_model')}")
+        rm = res.get('retrieval_model_dict') or {}
+        print(f"  Threshold:   {rm.get('score_threshold')} (enabled: {rm.get('score_threshold_enabled')})")
+
+    elif args.command == "list-documents":
+        res = api_call(f'/console/api/datasets/{args.dataset_id}/documents?page={args.page}&limit={args.limit}')
+        documents = res.get('data', [])
+        headers = ['ID', 'Name', 'Status', 'Word Count', 'Created At']
+        rows = []
+        for doc in documents:
+            rows.append([
+                doc.get('id'),
+                doc.get('name'),
+                doc.get('indexing_status', '').upper(),
+                doc.get('word_count', 0),
+                format_timestamp(doc.get('created_at'))
+            ])
+        print_table(headers, rows)
+
+    elif args.command == "upload-document":
+        dataset = api_call(f'/console/api/datasets/{args.dataset_id}')
+        indexing_technique = dataset.get('indexing_technique') or 'high_quality'
+        
+        print(f"Uploading file '{args.file}' to console...")
+        upload_res = console_upload_file(args.file)
+        file_id = upload_res.get('id')
+        if not file_id:
+            print("Error: Failed to obtain file ID from upload.", file=sys.stderr)
+            sys.exit(1)
+        print(f"File uploaded successfully. File ID: {file_id}")
+
+        if args.separator is not None or args.max_tokens is not None or args.chunk_overlap is not None:
+            process_rule = {
+                'mode': 'custom',
+                'rules': {
+                    'pre_processing_rules': [
+                        {'id': 'remove_extra_spaces', 'enabled': True},
+                        {'id': 'remove_urls_emails', 'enabled': False}
+                    ],
+                    'segmentation': {
+                        'separator': args.separator if args.separator is not None else '\n',
+                        'max_tokens': args.max_tokens if args.max_tokens is not None else 500,
+                        'chunk_overlap': args.chunk_overlap if args.chunk_overlap is not None else 0
+                    }
+                }
+            }
+        else:
+            process_rule = {
+                'mode': 'automatic'
+            }
+
+        payload = {
+            'indexing_technique': indexing_technique,
+            'doc_form': args.doc_form,
+            'doc_language': 'English',
+            'data_source': {
+                'info_list': {
+                    'data_source_type': 'upload_file',
+                    'file_info_list': {
+                        'file_ids': [file_id]
+                    }
+                }
+            },
+            'process_rule': process_rule
+        }
+        
+        if dataset.get('embedding_model'):
+            payload['embedding_model'] = dataset.get('embedding_model')
+        if dataset.get('embedding_model_provider'):
+            payload['embedding_model_provider'] = dataset.get('embedding_model_provider')
+
+        print("Registering document in dataset...")
+        res = api_call(f'/console/api/datasets/{args.dataset_id}/documents', 'POST', payload)
+        documents = res.get('documents', [])
+        if documents:
+            doc = documents[0]
+            print("Document registered successfully:")
+            print(f"  Document ID: {doc.get('id')}")
+            print(f"  Name:        {doc.get('name')}")
+            print(f"  Status:      {doc.get('indexing_status', '').upper()}")
+        else:
+            print("Document registration complete, but no document details returned.")
+
+    elif args.command == "delete-document":
+        api_call(f'/console/api/datasets/{args.dataset_id}/documents?document_id={args.document_id}', 'DELETE')
+        print(f"Document {args.document_id} deleted successfully.")
+
+    elif args.command == "retrieve":
+        payload = {
+            'query': args.query
+        }
+        if args.top_k is not None or args.threshold is not None:
+            current = api_call(f'/console/api/datasets/{args.dataset_id}')
+            retrieval_dict = current.get('retrieval_model_dict') or {}
+            retrieval_payload = {
+                'search_method': retrieval_dict.get('search_method', 'semantic_search'),
+                'reranking_enable': retrieval_dict.get('reranking_enable', False),
+                'reranking_model': retrieval_dict.get('reranking_model', {'reranking_provider_name': '', 'reranking_model_name': ''}),
+                'reranking_mode': retrieval_dict.get('reranking_mode'),
+                'top_k': int(args.top_k) if args.top_k is not None else retrieval_dict.get('top_k', 4),
+                'score_threshold_enabled': True if args.threshold is not None else retrieval_dict.get('score_threshold_enabled', False),
+                'score_threshold': float(args.threshold) if args.threshold is not None else retrieval_dict.get('score_threshold'),
+                'weights': retrieval_dict.get('weights')
+            }
+            payload['retrieval_model'] = retrieval_payload
+
+        res = api_call(f'/console/api/datasets/{args.dataset_id}/hit-testing', 'POST', payload)
+        records = res.get('records', [])
+        print(f"\n🔍 Retrieval Results for query: '{args.query}'")
+        print(f"Total hits: {len(records)}\n")
+        
+        headers = ['Score', 'Document Name', 'Segment Content Preview']
+        rows = []
+        for r in records:
+            score = r.get('score', 0.0)
+            doc_name = r.get('segment', {}).get('document', {}).get('name', 'N/A')
+            content = r.get('segment', {}).get('content', '')
+            if len(content) > 100:
+                content = content[:97] + "..."
+            rows.append([
+                f"{score:.4f}" if score is not None else "0.0000",
+                doc_name,
+                content.replace('\n', ' ')
+            ])
+        print_table(headers, rows)
+
+    elif args.command == "test-chatflow":
+        app_key = get_app_key(args.app_key, getattr(args, 'app_id', None))
+        try:
+            inputs_dict = json.loads(args.inputs)
+        except json.JSONDecodeError:
+            print("Error: inputs must be a valid JSON string", file=sys.stderr)
+            sys.exit(1)
+        try:
+            files_list = json.loads(args.files)
+        except json.JSONDecodeError:
+            print("Error: files must be a valid JSON string", file=sys.stderr)
+            sys.exit(1)
+            
+        mode = 'blocking' if args.no_streaming else 'streaming'
+        run_chatflow(app_key, args.query, inputs_dict, files_list, args.conversation_id, mode, args.user)
 
 if __name__ == '__main__':
     main()

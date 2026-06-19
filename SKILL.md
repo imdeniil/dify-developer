@@ -38,8 +38,10 @@ python3 scripts/dify_dev_cli.py setup
 
 3.  **Генерация DSL (YAML)**:
     *   Сгенерируйте DSL в соответствии со спецификациями нод из `references/nodes/` и правилами переходов в `references/15-transitions-and-edges.md`.
-    *   *Важно:* Для переменных нод используйте ключ `variable` (не `name`), правильно настраивайте `Advanced settings` для группового режима агрегатора и handles для ветвления.
+    *   *Важно (Сверка с Pydantic)*: Во избежание ошибок валидации при импорте, перед генерацией DSL для сложных нод **всегда сверяйте имена полей** с Pydantic-схемами в бэкенде Dify (для RAG-нод — в `~/dify/api/core/workflow/nodes/<type>/entities.py`, для базовых — в пакете `graphon.nodes`). Не полагайтесь на текстовые референсы, если код бэкенда ожидает другие имена (например, `reranking_model.model` вместо `name`).
+    *   *Важно (Переменные)*: Для переменных нод используйте ключ `variable` (не `name`), правильно настраивайте `Advanced settings` для группового режима агрегатора и handles для ветвления.
     *   Сохраните полученный YAML-файл в локальную директорию (например, `/home/keemor/defyproj/draft_app.yaml`).
+
 
 4.  **Импорт приложения**:
     *   Используйте CLI-скрипт `python3 scripts/dify_dev_cli.py import --file /home/keemor/defyproj/draft_app.yaml`.
@@ -114,9 +116,17 @@ python3 scripts/dify_dev_cli.py setup
 *   `python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>` — валидация настроек подключения к провайдеру моделей.
 *   `python3 scripts/dify_dev_cli.py get-draft-json --app-id <app_id> [--output <path_to_file>]` — экспорт сырого JSON-графа черновика воркфлоу.
 *   `python3 scripts/dify_dev_cli.py update-draft-json --app-id <app_id> --file <path_to_json_file>` — обновление сырого JSON-графа черновика.
-*   `python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]` — запуск опубликованного workflow через Service API (по умолчанию в режиме SSE-стриминга).
+*   `python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--app-id <app_id>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]` — запуск опубликованного workflow через Service API (по умолчанию в режиме SSE-стриминга).
 *   `python3 scripts/dify_dev_cli.py app-stop [--app-key <key>] --task-id <id> [--user <user>]` — принудительная остановка запущенного таска опубликованного workflow.
 *   `python3 scripts/dify_dev_cli.py app-run-detail [--app-key <key>] --run-id <id>` — получение подробностей выполнения конкретного запуска опубликованного workflow.
 *   `python3 scripts/dify_dev_cli.py app-parameters [--app-key <key>]` — получение входных параметров сценария (схемы ввода, настроек файлов).
 *   `python3 scripts/dify_dev_cli.py app-upload [--app-key <key>] --file <path> [--user <user>]` — загрузка файла на сервер Dify для использования в качестве входного файла для workflow.
+*   `python3 scripts/dify_dev_cli.py test-chatflow [--app-key <key>] [--app-id <app_id>] --query <query> [--inputs '<json_string>'] [--files '<json_string>'] [--conversation-id <id>] [--no-streaming] [--user <user>]` — запуск и тестирование Chatflow-приложения через Service API.
+*   `python3 scripts/dify_dev_cli.py list-datasets [--page <page>] [--limit <limit>]` — вывод списка баз знаний.
+*   `python3 scripts/dify_dev_cli.py create-dataset --name <name> [--description <desc>] [--indexing-technique <tech>] [--permission <perm>]` — создание новой базы знаний.
+*   `python3 scripts/dify_dev_cli.py patch-dataset --dataset-id <id> [--name <name>] [--description <desc>] [--permission <perm>] [--indexing-technique <tech>] [--embedding <embedding>] [--threshold <float>]` — обновление параметров базы знаний.
+*   `python3 scripts/dify_dev_cli.py list-documents --dataset-id <id> [--page <page>] [--limit <limit>]` — список документов базы знаний.
+*   `python3 scripts/dify_dev_cli.py upload-document --dataset-id <id> --file <path> [--doc-form text_model|qa_model] [--separator <sep>] [--max-tokens <int>] [--chunk-overlap <int>]` — загрузка и индексация локального документа в базу знаний.
+*   `python3 scripts/dify_dev_cli.py delete-document --dataset-id <id> --document-id <doc_id>` — удаление документа из базы знаний.
+*   `python3 scripts/dify_dev_cli.py retrieve --dataset-id <id> --query <query> [--top-k <int>] [--threshold <float>]` — тестирование поиска (hit testing) по базе знаний.
 

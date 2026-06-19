@@ -1,3 +1,6 @@
+> ⚠️ ИСТОЧНИК ИСТИНЫ: Pydantic-схема в бэкенде Dify (в пакете graphon.nodes (в entities.py для variable_aggregator)).
+> Если референс расходится с кодом — код прав. Перед генерацией DSL сверяй поля.
+
 # Variable Aggregator Node — Верифицированный справочник
 
 > Протестировано на Dify 1.14.2 self-hosted, 2026-06-18.

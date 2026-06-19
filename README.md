@@ -189,13 +189,13 @@ python3 scripts/dify_dev_cli.py setup
   python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>
   ```
 
-### 6. Работа с опубликованными Workflow (Service API)
+### 6. Работа с опубликованными приложениями (Service API)
 
-Для работы с этой группой команд вам понадобится API-ключ конкретного опубликованного приложения (`app-xxxxxxxx`). Его можно сгенерировать в UI Dify или получить программно через команду `create-key`. Ключ можно передавать через аргумент `--app-key` или задать в `.env` как переменную `DIFY_APP_KEY`.
+Для работы с этой группой команд вам понадобится API-ключ конкретного опубликованного приложения (`app-xxxxxxxx`). Его можно сгенерировать в UI Dify или получить программно через команду `create-key`. Ключ можно передавать через аргумент `--app-key` или задать в `.env` как переменную `DIFY_APP_KEY`. Если указан аргумент `--app-id`, CLI автоматически получит или создаст API-ключ для этого приложения.
 
 * **Запуск опубликованного workflow (App Run)**:
   ```bash
-  python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]
+  python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--app-id <app_id>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]
   ```
   По умолчанию запускает выполнение в интерактивном режиме SSE-стриминга логов.
 * **Принудительная остановка таска (App Stop)**:
@@ -216,8 +216,48 @@ python3 scripts/dify_dev_cli.py setup
   python3 scripts/dify_dev_cli.py app-upload [--app-key <key>] --file <path_to_local_file> [--user <user>]
   ```
   Возвращает JSON с `id` загруженного файла, который затем можно передать в качестве значения для файловой переменной на шаге `app-run`.
+* **Запуск и тестирование Chatflow (test-chatflow)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py test-chatflow [--app-key <key>] [--app-id <app_id>] --query <query> [--inputs '<json_string>'] [--files '<json_string>'] [--conversation-id <id>] [--no-streaming] [--user <user>]
+  ```
+  Использует Service API `/v1/chat-messages` для взаимодействия с Chatflow-приложениями. Поддерживает SSE-стриминг ответа ассистента.
 
-### 7. Запуск тестов
+### 7. Управление Базами Знаний (Datasets / Knowledge Base)
+
+Позволяет полностью автоматизировать управление коллекциями документов и проверку качества RAG.
+
+* **Список баз знаний**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-datasets [--page <page>] [--limit <limit>]
+  ```
+* **Создание базы знаний**:
+  ```bash
+  python3 scripts/dify_dev_cli.py create-dataset --name <name> [--description <desc>] [--indexing-technique high_quality|economy] [--permission only_me|all_team_members|partial_members]
+  ```
+* **Обновление настроек (Patch)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py patch-dataset --dataset-id <id> [--name <name>] [--description <desc>] [--permission <permission>] [--indexing-technique <technique>] [--embedding <provider/model>] [--threshold <float>]
+  ```
+* **Список документов базы знаний**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-documents --dataset-id <dataset_id> [--page <page>] [--limit <limit>]
+  ```
+* **Загрузка и индексация локального документа**:
+  ```bash
+  python3 scripts/dify_dev_cli.py upload-document --dataset-id <dataset_id> --file <path_to_file> [--doc-form text_model|qa_model] [--separator <sep>] [--max-tokens <int>] [--chunk-overlap <int>]
+  ```
+  Автоматически загружает файл во временное хранилище Dify Console, после чего запускает индексацию с правилами разметки (автоматический режим или кастомное разбиение по токенам/разделителям).
+* **Удаление документа**:
+  ```bash
+  python3 scripts/dify_dev_cli.py delete-document --dataset-id <dataset_id> --document-id <document_id>
+  ```
+* **Тестирование извлечения / Hit Testing**:
+  ```bash
+  python3 scripts/dify_dev_cli.py retrieve --dataset-id <dataset_id> --query <query_text> [--top-k <int>] [--threshold <float>]
+  ```
+  Выполняет тестовый запрос поиска по базе знаний с выводом скора релевантности и отрывков найденных сегментов.
+
+### 8. Запуск тестов
 Для проверки работоспособности клиента выполните:
 ```bash
 python3 -m unittest scripts/test_cli.py
