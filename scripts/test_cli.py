@@ -152,5 +152,91 @@ class TestDifyDevCli(unittest.TestCase):
         res = dify_dev_cli.api_call('/console/api/apps/app-1/workflows/draft')
         self.assertEqual(res.get('id'), 'draft-1')
 
+    def test_get_app_key(self):
+        # 1. From args
+        key = dify_dev_cli.get_app_key('my-key-args')
+        self.assertEqual(key, 'my-key-args')
+        
+        # 2. From env fallback
+        with patch.dict(dify_dev_cli.env_vars, {'DIFY_APP_KEY': 'my-key-env'}):
+            key = dify_dev_cli.get_app_key(None)
+            self.assertEqual(key, 'my-key-env')
+
+    @patch('dify_dev_cli.urllib.request.urlopen')
+    def test_app_api_call_success(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"status": "success"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        res = dify_dev_cli.app_api_call('app-key-123', '/v1/parameters')
+        self.assertEqual(res, {"status": "success"})
+        mock_urlopen.assert_called_once()
+
+    @patch('dify_dev_cli.app_api_call')
+    def test_run_published_app_blocking(self, mock_app_api_call):
+        mock_app_api_call.return_value = {
+            'workflow_run_id': 'run-123',
+            'task_id': 'task-456',
+            'data': {'status': 'succeeded', 'outputs': {'res': 'ok'}}
+        }
+        
+        dify_dev_cli.run_published_app('app-key-123', {'x': 1}, [], 'blocking', 'test-user')
+        mock_app_api_call.assert_called_once_with(
+            'app-key-123',
+            '/v1/workflows/run',
+            'POST',
+            {
+                'inputs': {'x': 1},
+                'files': [],
+                'response_mode': 'blocking',
+                'user': 'test-user'
+            }
+        )
+
+    @patch('dify_dev_cli.urllib.request.urlopen')
+    def test_run_published_app_streaming(self, mock_urlopen):
+        mock_response = MagicMock()
+        mock_response.readline.side_effect = [
+            b'data: {"event": "workflow_started", "workflow_run_id": "run-123", "task_id": "task-456"}\n',
+            b'data: {"event": "node_started", "title": "Start"}\n',
+            b'data: {"event": "text_chunk", "text": "chunk-1"}\n',
+            b'data: {"event": "workflow_finished", "status": "succeeded"}\n',
+            b''
+        ]
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        dify_dev_cli.run_published_app('app-key-123', {'x': 1}, [], 'streaming', 'test-user')
+        self.assertEqual(mock_urlopen.call_count, 1)
+
+    @patch('dify_dev_cli.app_api_call')
+    def test_app_stop_task(self, mock_app_api_call):
+        mock_app_api_call.return_value = {'result': 'success'}
+        res = dify_dev_cli.app_api_call('app-key-123', '/v1/workflows/tasks/task-456/stop', 'POST', {'user': 'test-user'})
+        self.assertEqual(res.get('result'), 'success')
+
+    @patch('dify_dev_cli.app_api_call')
+    def test_app_parameters(self, mock_app_api_call):
+        mock_app_api_call.return_value = {'user_input_form': []}
+        res = dify_dev_cli.app_api_call('app-key-123', '/v1/parameters')
+        self.assertEqual(res.get('user_input_form'), [])
+
+    @patch('dify_dev_cli.urllib.request.urlopen')
+    @patch('dify_dev_cli.os.path.exists')
+    @patch('dify_dev_cli.open', create=True)
+    def test_app_upload_file(self, mock_open, mock_exists, mock_urlopen):
+        mock_exists.return_value = True
+        mock_file = MagicMock()
+        mock_file.read.return_value = b'dummy-file-content'
+        mock_open.return_value.__enter__.return_value = mock_file
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"id": "file-123", "name": "test.txt"}'
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        res = dify_dev_cli.app_upload_file('app-key-123', 'dummy_path.txt', 'test-user')
+        self.assertEqual(res.get('id'), 'file-123')
+        self.assertEqual(res.get('name'), 'test.txt')
+        mock_urlopen.assert_called_once()
+
 if __name__ == '__main__':
     unittest.main()

@@ -189,7 +189,35 @@ python3 scripts/dify_dev_cli.py setup
   python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>
   ```
 
-### 6. Запуск тестов
+### 6. Работа с опубликованными Workflow (Service API)
+
+Для работы с этой группой команд вам понадобится API-ключ конкретного опубликованного приложения (`app-xxxxxxxx`). Его можно сгенерировать в UI Dify или получить программно через команду `create-key`. Ключ можно передавать через аргумент `--app-key` или задать в `.env` как переменную `DIFY_APP_KEY`.
+
+* **Запуск опубликованного workflow (App Run)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]
+  ```
+  По умолчанию запускает выполнение в интерактивном режиме SSE-стриминга логов.
+* **Принудительная остановка таска (App Stop)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py app-stop [--app-key <key>] --task-id <id> [--user <user>]
+  ```
+* **Получить детальный статус и результат запуска (App Run Detail)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py app-run-detail [--app-key <key>] --run-id <run_id>
+  ```
+* **Получить входные параметры приложения (App Parameters)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py app-parameters [--app-key <key>]
+  ```
+  Возвращает схему ожидаемых переменных и настройки лимитов загрузки файлов.
+* **Загрузка файла на сервер Dify (App File Upload)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py app-upload [--app-key <key>] --file <path_to_local_file> [--user <user>]
+  ```
+  Возвращает JSON с `id` загруженного файла, который затем можно передать в качестве значения для файловой переменной на шаге `app-run`.
+
+### 7. Запуск тестов
 Для проверки работоспособности клиента выполните:
 ```bash
 python3 -m unittest scripts/test_cli.py

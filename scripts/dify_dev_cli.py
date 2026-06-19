@@ -6,6 +6,8 @@ import subprocess
 import urllib.request
 import urllib.error
 import urllib.parse
+import uuid
+import mimetypes
 from datetime import datetime
 
 # Load environment
@@ -264,6 +266,162 @@ Skip the pull for quick lookups — the user will refresh when needed.
         
     print("Environment setup completed successfully.")
 
+def app_api_call(app_key, path, method='GET', payload=None):
+    url = f"{BASE_URL}{path}"
+    data = json.dumps(payload).encode() if payload else None
+    app_headers = {
+        'Authorization': f'Bearer {app_key}',
+        'Content-Type': 'application/json'
+    }
+    req = urllib.request.Request(url, data=data, headers=app_headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode()
+            return json.loads(content) if content else {}
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"App API Error {e.code} on {method} {path}: {body}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"App API Request failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def app_upload_file(app_key, file_path, user):
+    url = f"{BASE_URL}/v1/files/upload"
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+    
+    if not os.path.exists(file_path):
+        print(f"Error: File '{file_path}' not found", file=sys.stderr)
+        sys.exit(1)
+        
+    filename = os.path.basename(file_path)
+    mime_type, _ = mimetypes.guess_type(file_path)
+    if not mime_type:
+        mime_type = 'application/octet-stream'
+        
+    with open(file_path, 'rb') as f:
+        file_content = f.read()
+        
+    parts = []
+    
+    # user part
+    parts.append(f"--{boundary}".encode('utf-8'))
+    parts.append(f'Content-Disposition: form-data; name="user"'.encode('utf-8'))
+    parts.append(b'')
+    parts.append(user.encode('utf-8'))
+    
+    # file part
+    parts.append(f"--{boundary}".encode('utf-8'))
+    parts.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode('utf-8'))
+    parts.append(f'Content-Type: {mime_type}'.encode('utf-8'))
+    parts.append(b'')
+    parts.append(file_content)
+    
+    # end
+    parts.append(f"--{boundary}--".encode('utf-8'))
+    parts.append(b'')
+    
+    body = b'\r\n'.join(parts)
+    
+    req_headers = {
+        'Authorization': f'Bearer {app_key}',
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body))
+    }
+    
+    req = urllib.request.Request(url, data=body, headers=req_headers, method='POST')
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode()
+            return json.loads(content) if content else {}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        print(f"File upload failed ({e.code}): {err_body}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"File upload connection error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def handle_app_workflow_event(event):
+    ev = event.get('event')
+    data = event.get('data') or event
+    
+    if ev == 'workflow_started':
+        print(f"\n🚀 WORKFLOW STARTED (Run ID: {data.get('workflow_run_id') or data.get('id')})")
+        if data.get('task_id'):
+            print(f"  Task ID: {data.get('task_id')}")
+    elif ev == 'node_started':
+        print(f"  • Node [{data.get('title')}] ({data.get('node_type')}) started...")
+    elif ev == 'node_finished':
+        status = data.get('status')
+        badge = "✅" if status == "succeeded" else "❌"
+        print(f"  {badge} Node [{data.get('title')}] finished: {status}")
+        if data.get('outputs'):
+            print(f"    Outputs: {data.get('outputs')}")
+        if data.get('error'):
+            print(f"    Error: {data.get('error')}")
+    elif ev == 'text_chunk':
+        print(data.get('text', ''), end='', flush=True)
+    elif ev == 'workflow_finished':
+        print(f"\n🏁 WORKFLOW FINISHED: {data.get('status')}")
+        if data.get('outputs'):
+            print(f"  Outputs: {data.get('outputs')}")
+        if data.get('error'):
+            print(f"  Error: {data.get('error')}")
+
+def run_published_app(app_key, inputs, files, response_mode, user):
+    url = f"{BASE_URL}/v1/workflows/run"
+    payload = {
+        'inputs': inputs,
+        'files': files,
+        'response_mode': response_mode,
+        'user': user
+    }
+    data = json.dumps(payload).encode()
+    app_headers = {
+        'Authorization': f'Bearer {app_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    if response_mode == 'streaming':
+        req = urllib.request.Request(url, data=data, headers=app_headers, method='POST')
+        print("Starting workflow execution stream (Service API)...")
+        try:
+            with urllib.request.urlopen(req) as resp:
+                while True:
+                    line = resp.readline().decode()
+                    if not line:
+                        break
+                    line = line.strip()
+                    event = parse_sse_line(line)
+                    if event:
+                        handle_app_workflow_event(event)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode()
+            print(f"Workflow stream failed ({e.code}): {err_body}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Workflow stream connection error: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        res = app_api_call(app_key, '/v1/workflows/run', 'POST', payload)
+        print("\n🏁 WORKFLOW EXECUTION COMPLETED (Blocking Mode)")
+        print(f"  Run ID:  {res.get('workflow_run_id')}")
+        print(f"  Task ID: {res.get('task_id')}")
+        data = res.get('data', {})
+        print(f"  Status:  {data.get('status', '').upper()}")
+        if data.get('outputs'):
+            print(f"  Outputs: {data.get('outputs')}")
+        if data.get('error'):
+            print(f"  Error:   {data.get('error')}")
+
+def get_app_key(args_key):
+    key = args_key or env_vars.get('DIFY_APP_KEY')
+    if not key:
+        print("Error: App API key is required. Specify via --app-key or DIFY_APP_KEY in .env", file=sys.stderr)
+        sys.exit(1)
+    return key
+
 def main():
     parser = argparse.ArgumentParser(description="Dify Workflow Developer CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -406,6 +564,36 @@ def main():
     update_draft_json_parser = subparsers.add_parser("update-draft-json", help="Update draft raw JSON graph of an app")
     update_draft_json_parser.add_argument("--app-id", required=True, help="App ID")
     update_draft_json_parser.add_argument("--file", "-i", required=True, help="Input file path containing new JSON graph")
+
+    # === Service/App API commands ===
+    # App run
+    app_run_parser = subparsers.add_parser("app-run", help="Run the published workflow using Service API")
+    app_run_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    app_run_parser.add_argument("--inputs", default="{}", help="Inputs as JSON string")
+    app_run_parser.add_argument("--files", default="[]", help="Input files as JSON string")
+    app_run_parser.add_argument("--no-streaming", action="store_true", help="Run in blocking mode instead of streaming")
+    app_run_parser.add_argument("--user", default="dify-developer-cli-user", help="User identifier")
+
+    # App stop
+    app_stop_parser = subparsers.add_parser("app-stop", help="Stop a running workflow task using Service API")
+    app_stop_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    app_stop_parser.add_argument("--task-id", required=True, help="Task ID to stop")
+    app_stop_parser.add_argument("--user", default="dify-developer-cli-user", help="User identifier")
+
+    # App run detail
+    app_detail_parser = subparsers.add_parser("app-run-detail", help="Get workflow run details using Service API")
+    app_detail_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    app_detail_parser.add_argument("--run-id", required=True, help="Workflow Run ID")
+
+    # App parameters
+    app_params_parser = subparsers.add_parser("app-parameters", help="Get application parameters using Service API")
+    app_params_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+
+    # App upload file
+    app_upload_parser = subparsers.add_parser("app-upload", help="Upload a file using Service API")
+    app_upload_parser.add_argument("--app-key", help="App API Key (defaults to DIFY_APP_KEY in env)")
+    app_upload_parser.add_argument("--file", required=True, help="Path to local file to upload")
+    app_upload_parser.add_argument("--user", default="dify-developer-cli-user", help="User identifier")
 
     args = parser.parse_args()
 
@@ -838,6 +1026,50 @@ def main():
         }
         res = api_call(f'/console/api/apps/{args.app_id}/workflows/draft', 'POST', payload)
         print(f"Draft JSON graph updated successfully. New hash: {res.get('hash')}")
+
+    elif args.command == "app-run":
+        app_key = get_app_key(args.app_key)
+        try:
+            inputs_dict = json.loads(args.inputs)
+        except json.JSONDecodeError:
+            print("Error: inputs must be a valid JSON string", file=sys.stderr)
+            sys.exit(1)
+        try:
+            files_list = json.loads(args.files)
+        except json.JSONDecodeError:
+            print("Error: files must be a valid JSON string", file=sys.stderr)
+            sys.exit(1)
+            
+        mode = 'blocking' if args.no_streaming else 'streaming'
+        run_published_app(app_key, inputs_dict, files_list, mode, args.user)
+
+    elif args.command == "app-stop":
+        app_key = get_app_key(args.app_key)
+        payload = {
+            'user': args.user
+        }
+        res = app_api_call(app_key, f'/v1/workflows/tasks/{args.task_id}/stop', 'POST', payload)
+        result = res.get('result') or 'success'
+        print(f"Stop task request sent. Result: {result}")
+
+    elif args.command == "app-run-detail":
+        app_key = get_app_key(args.app_key)
+        res = app_api_call(app_key, f'/v1/workflows/run/{args.run_id}')
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+
+    elif args.command == "app-parameters":
+        app_key = get_app_key(args.app_key)
+        res = app_api_call(app_key, '/v1/parameters')
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+
+    elif args.command == "app-upload":
+        app_key = get_app_key(args.app_key)
+        res = app_upload_file(app_key, args.file, args.user)
+        print("File uploaded successfully:")
+        print(f"  ID:        {res.get('id')}")
+        print(f"  Name:      {res.get('name')}")
+        print(f"  Extension: {res.get('extension')}")
+        print(f"  Size:      {res.get('size')} bytes")
 
 if __name__ == '__main__':
     main()

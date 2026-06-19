@@ -105,3 +105,9 @@ python3 scripts/dify_dev_cli.py setup
 *   `python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>` — валидация настроек подключения к провайдеру моделей.
 *   `python3 scripts/dify_dev_cli.py get-draft-json --app-id <app_id> [--output <path_to_file>]` — экспорт сырого JSON-графа черновика воркфлоу.
 *   `python3 scripts/dify_dev_cli.py update-draft-json --app-id <app_id> --file <path_to_json_file>` — обновление сырого JSON-графа черновика.
+*   `python3 scripts/dify_dev_cli.py app-run [--app-key <key>] [--inputs '<json_string>'] [--files '<json_string>'] [--no-streaming] [--user <user>]` — запуск опубликованного workflow через Service API (по умолчанию в режиме SSE-стриминга).
+*   `python3 scripts/dify_dev_cli.py app-stop [--app-key <key>] --task-id <id> [--user <user>]` — принудительная остановка запущенного таска опубликованного workflow.
+*   `python3 scripts/dify_dev_cli.py app-run-detail [--app-key <key>] --run-id <id>` — получение подробностей выполнения конкретного запуска опубликованного workflow.
+*   `python3 scripts/dify_dev_cli.py app-parameters [--app-key <key>]` — получение входных параметров сценария (схемы ввода, настроек файлов).
+*   `python3 scripts/dify_dev_cli.py app-upload [--app-key <key>] --file <path> [--user <user>]` — загрузка файла на сервер Dify для использования в качестве входного файла для workflow.
+
