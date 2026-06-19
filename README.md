@@ -52,41 +52,147 @@ python3 scripts/dify_dev_cli.py setup
 
 ## Использование CLI
 
-Все команды запускаются с помощью скрипта `scripts/dify_dev_cli.py`:
+Все взаимодействия с Dify Console API осуществляются через скрипт `scripts/dify_dev_cli.py`. Авторизация (`DIFY_CONSOLE_TOKEN`, `DIFY_WORKSPACE_ID`, `DIFY_BASE_URL`) автоматически подгружается из файла `.env` в корне проекта.
 
-### Импорт сценария из YAML DSL
-```bash
-python3 scripts/dify_dev_cli.py import --file path/to/app.yml [--name "Имя приложения"]
-```
-Команда импортирует сценарий в Dify и возвращает его `app_id`.
+### 1. Управление приложениями (Workflows/Chatflows)
 
-### Тестирование (Draft Run)
-Вы можете запустить сценарий в режиме интерактивного тестирования:
-```bash
-python3 scripts/dify_dev_cli.py test --app-id <app_id> --inputs '{"query": "Привет"}'
-```
-CLI подключится к SSE-потоку Dify и будет выводить шаги выполнения в реальном времени.
+* **Импорт приложения из DSL (YAML)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py import --file <path_to_yaml> [--name <name>] [--app-id <app_id>] [--description <desc>] [--icon <emoji>] [--icon-background <bg>]
+  ```
+  Импортирует новый workflow или обновляет существующий (если передан `--app-id`).
+* **Экспорт YAML DSL приложения**:
+  ```bash
+  python3 scripts/dify_dev_cli.py export --app-id <app_id> [--output <path_to_file>]
+  ```
+  Сохраняет текущую опубликованную конфигурацию в файл YAML DSL.
+* **Список приложений в workspace**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-apps [--page <page>] [--limit <limit>] [--name <name>] [--mode <mode>]
+  ```
+  Выводит таблицу со всеми приложениями (ID, имя, режим, статус публикации, иконка, дата обновления).
+* **Показать подробные метаданные приложения**:
+  ```bash
+  python3 scripts/dify_dev_cli.py show-app --app-id <app_id>
+  ```
+  Выводит детальную информацию о конкретном workflow в формате JSON.
+* **Публикация (Deploy)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py publish --app-id <app_id>
+  ```
+  Опубликовать текущую draft-версию workflow.
+* **Удаление приложения**:
+  ```bash
+  python3 scripts/dify_dev_cli.py delete --app-id <app_id>
+  ```
+  Полностью удаляет приложение из Dify.
 
-### Прохождение Human-in-the-Loop (HITL)
-Если выполнение сценария приостановится на ноде **Human Input**, CLI выведет токен формы:
-```
-⚠️ HUMAN INPUT REQUIRED!
-  Node: Review (ID: node_123)
-  Token: form-abc123xyz
-```
-Вы можете подтвердить или отклонить шаг прямо из консоли:
-```bash
-python3 scripts/dify_dev_cli.py submit-form --token form-abc123xyz --action approve --inputs '{"comment": "Все хорошо"}'
-```
-После этого вы можете получить оставшиеся события выполнения:
-```bash
-python3 scripts/dify_dev_cli.py get-events --run-id <run_id>
-```
+### 2. Тестирование и отладка (Runtimes & Runs)
 
-### Публикация и деплой
-Опубликуйте протестированную версию сценария:
+* **Интерактивный запуск черновика (Draft Run)**:
+  ```bash
+  python3 scripts/dify_dev_cli.py test --app-id <app_id> [--inputs '<json_string>'] [--files '<json_string>']
+  ```
+  Запуск draft-версии с чтением SSE-потока событий. Поддерживает передачу файлов для мультимодальных моделей (передаются в `--files` в формате JSON-массива объектов с полями `type`, `transfer_method`, `url`/`upload_file_id`).
+* **Прохождение Human-in-the-Loop (HITL)**:
+  Приостановленное выполнение на ноде `Human Input` выведет `form_token`. Отправьте ответ формы:
+  ```bash
+  python3 scripts/dify_dev_cli.py submit-form --token <form_token> --action <action_id> [--inputs '<json_string>']
+  ```
+* **Получение лога событий**:
+  ```bash
+  python3 scripts/dify_dev_cli.py get-events --run-id <run_id>
+  ```
+  Позволяет дочитать поток событий после продолжения HITL или других прерываний.
+* **Список истории запусков**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-runs --app-id <app_id> [--limit <limit>] [--page <page>] [--status <status>]
+  ```
+  Отображает список всех запусков workflow и их статусы.
+* **Принудительная остановка выполнения**:
+  ```bash
+  python3 scripts/dify_dev_cli.py stop-run --app-id <app_id> --run-id <run_id>
+  ```
+  Останавливает выполняющийся запуск workflow.
+* **Проверка зависимостей приложения**:
+  ```bash
+  python3 scripts/dify_dev_cli.py check-deps --app-id <app_id>
+  ```
+  Проверяет используемые в графе модели, плагины и MCP-серверы на доступность в вашем workspace.
+* **Экспорт/импорт сырого JSON-графа (Draft JSON)**:
+  ```bash
+  # Получить текущий JSON графа
+  python3 scripts/dify_dev_cli.py get-draft-json --app-id <app_id> [--output <path_to_file>]
+  
+  # Импортировать JSON графа напрямую
+  python3 scripts/dify_dev_cli.py update-draft-json --app-id <app_id> --file <path_to_json_file>
+  ```
+
+### 3. Управление API-ключами приложения
+
+* **Список ключей**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-keys --app-id <app_id>
+  ```
+* **Создание нового ключа**:
+  ```bash
+  python3 scripts/dify_dev_cli.py create-key --app-id <app_id>
+  ```
+* **Удаление ключа**:
+  ```bash
+  python3 scripts/dify_dev_cli.py delete-key --app-id <app_id> --key-id <key_id>
+  ```
+
+### 4. Управление MCP-серверами (Workspace Level)
+
+* **Список MCP-серверов**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-mcp
+  ```
+* **Добавление нового MCP-сервера**:
+  ```bash
+  python3 scripts/dify_dev_cli.py add-mcp --name <name> --url <url> --identifier <id> [--icon <emoji>] [--headers <json_or_pairs>] [--timeout <timeout>] [--sse-timeout <sse_timeout>]
+  ```
+* **Обновление параметров MCP-сервера**:
+  ```bash
+  python3 scripts/dify_dev_cli.py update-mcp --provider-id <id_name_or_uuid> [--name <name>] [--url <url>] [--identifier <id>] [--icon <emoji>] [--headers <json_or_pairs>] [--timeout <timeout>] [--sse-timeout <sse_timeout>]
+  ```
+* **Удаление MCP-сервера**:
+  ```bash
+  python3 scripts/dify_dev_cli.py delete-mcp --provider-id <id_name_or_uuid>
+  ```
+  MCP-сервер можно удалять или обновлять, указывая его UUID, название (`name`) или идентификатор (`identifier`).
+
+### 5. Настройка моделей и провайдеров (Workspace Admin Level)
+
+* **Список активных провайдеров и моделей**:
+  ```bash
+  python3 scripts/dify_dev_cli.py list-models
+  ```
+* **Модели по умолчанию для workspace**:
+  ```bash
+  # Получить модель по умолчанию для типа (например, llm, text-embedding)
+  python3 scripts/dify_dev_cli.py get-default-model --model-type <type>
+  
+  # Установить модель по умолчанию
+  python3 scripts/dify_dev_cli.py set-default-model --model-type <type> --model <model> --provider <provider>
+  ```
+* **Настройка ключей доступа к провайдерам ИИ (API Credentials)**:
+  ```bash
+  # Посмотреть текущую конфигурацию провайдера
+  python3 scripts/dify_dev_cli.py get-model-credentials --provider <provider>
+  
+  # Сохранить/создать API-ключи провайдера
+  python3 scripts/dify_dev_cli.py set-model-credentials --provider <provider> --credentials <json_string> [--name <name>]
+  
+  # Проверить подключение с указанными ключами
+  python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>
+  ```
+
+### 6. Запуск тестов
+Для проверки работоспособности клиента выполните:
 ```bash
-python3 scripts/dify_dev_cli.py publish --app-id <app_id>
+python3 -m unittest scripts/test_cli.py
 ```
 
 ---
