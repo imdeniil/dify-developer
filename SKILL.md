@@ -78,9 +78,30 @@ python3 scripts/dify_dev_cli.py setup
 
 Основные команды:
 *   `python3 scripts/dify_dev_cli.py setup` — инициализация доков и субагентов на машине.
-*   `python3 scripts/dify_dev_cli.py import --file <path_to_yaml>` — импорт приложения из DSL.
-*   `python3 scripts/dify_dev_cli.py test --app-id <app_id> [--inputs '<json_string>']` — интерактивный запуск draft-версии с чтением SSE.
+*   `python3 scripts/dify_dev_cli.py import --file <path_to_yaml> [--name <name>] [--app-id <app_id>] [--description <desc>] [--icon <emoji>] [--icon-background <bg>]` — импорт нового приложения или обновление существующего из DSL.
+*   `python3 scripts/dify_dev_cli.py test --app-id <app_id> [--inputs '<json_string>'] [--files '<json_string>']` — интерактивный запуск draft-версии с чтением SSE (поддерживает файлы для мультимодальных ранов).
 *   `python3 scripts/dify_dev_cli.py submit-form --token <form_token> --action <action_id> [--inputs '<json_string>']` — отправка ответа для Human-in-the-Loop формы.
 *   `python3 scripts/dify_dev_cli.py get-events --run-id <workflow_run_id>` — получение лога событий возобновленного запуска.
 *   `python3 scripts/dify_dev_cli.py publish --app-id <app_id>` — публикация (деплой) рабочей версии.
 *   `python3 scripts/dify_dev_cli.py delete --app-id <app_id>` — удаление приложения из Dify.
+*   `python3 scripts/dify_dev_cli.py list-apps [--page <page>] [--limit <limit>] [--name <name>] [--mode <mode>]` — вывод списка всех приложений в workspace в виде таблицы.
+*   `python3 scripts/dify_dev_cli.py export --app-id <app_id> [--output <path_to_file>]` — экспорт YAML DSL приложения.
+*   `python3 scripts/dify_dev_cli.py list-runs --app-id <app_id> [--limit <limit>] [--page <page>] [--status <status>]` — вывод истории запусков workflow.
+*   `python3 scripts/dify_dev_cli.py list-keys --app-id <app_id>` — вывод списка ключей API.
+*   `python3 scripts/dify_dev_cli.py create-key --app-id <app_id>` — создание нового ключа API.
+*   `python3 scripts/dify_dev_cli.py delete-key --app-id <app_id> --key-id <key_id>` — удаление ключа API.
+*   `python3 scripts/dify_dev_cli.py list-mcp` — список всех MCP-провайдеров в workspace.
+*   `python3 scripts/dify_dev_cli.py add-mcp --name <name> --url <url> --identifier <id> [--icon <emoji>] [--headers <json_or_pairs>] [--timeout <timeout>] [--sse-timeout <sse_timeout>]` — добавление нового MCP-сервера.
+*   `python3 scripts/dify_dev_cli.py delete-mcp --provider-id <id_name_or_uuid>` — удаление MCP-сервера по UUID, названию или идентификатору.
+*   `python3 scripts/dify_dev_cli.py update-mcp --provider-id <id_name_or_uuid> [--name <name>] [--url <url>] [--identifier <id>] [--icon <emoji>] [--headers <json_or_pairs>] [--timeout <timeout>] [--sse-timeout <sse_timeout>]` — обновление параметров существующего MCP-сервера.
+*   `python3 scripts/dify_dev_cli.py show-app --app-id <app_id>` — вывод детальных метаданных приложения.
+*   `python3 scripts/dify_dev_cli.py stop-run --app-id <app_id> --run-id <run_id>` — принудительная остановка запущенного workflow.
+*   `python3 scripts/dify_dev_cli.py list-models` — вывод таблицы активных AI провайдеров и поддерживаемых моделей в workspace.
+*   `python3 scripts/dify_dev_cli.py check-deps --app-id <app_id>` — проверка зависимостей (моделей, плагинов, MCP) для workflow.
+*   `python3 scripts/dify_dev_cli.py get-default-model --model-type <type>` — вывод модели по умолчанию для указанного типа (llm, text-embedding и т.д.).
+*   `python3 scripts/dify_dev_cli.py set-default-model --model-type <type> --model <model> --provider <provider>` — установка модели по умолчанию для типа воркспейса.
+*   `python3 scripts/dify_dev_cli.py get-model-credentials --provider <provider>` — получение конфигурации доступа/ключей провайдера моделей.
+*   `python3 scripts/dify_dev_cli.py set-model-credentials --provider <provider> --credentials <json_string> [--name <name>]` — сохранение/создание API-ключей для провайдера.
+*   `python3 scripts/dify_dev_cli.py validate-model-credentials --provider <provider> --credentials <json_string>` — валидация настроек подключения к провайдеру моделей.
+*   `python3 scripts/dify_dev_cli.py get-draft-json --app-id <app_id> [--output <path_to_file>]` — экспорт сырого JSON-графа черновика воркфлоу.
+*   `python3 scripts/dify_dev_cli.py update-draft-json --app-id <app_id> --file <path_to_json_file>` — обновление сырого JSON-графа черновика.
